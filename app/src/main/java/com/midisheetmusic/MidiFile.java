@@ -1421,16 +1421,21 @@ public class MidiFile {
                 if (channel < 0 || channel >= keepchannel.length) {
                     continue;
                 }
-                if (!keepchannel[channel]) {
-                    continue;
-                }
                 MidiEvent copy = e.Clone();
                 int num = (copy.Notenumber & 0xFF) + options.transpose;
                 if (num < 0) num = 0;
                 if (num > 127) num = 127;
                 copy.Notenumber = (byte) num;
-                int vol = channelVolume[channel];
-                copy.Velocity = (byte) Math.min(127, ((copy.Velocity & 0xFF) * vol) / 100);
+                if (!keepchannel[channel]) {
+                    /* Keep muted-channel note events to preserve timing while
+                     * silencing the channel. */
+                    if (copy.EventFlag == EventNoteOn) {
+                        copy.Velocity = 0;
+                    }
+                } else {
+                    int vol = channelVolume[channel];
+                    copy.Velocity = (byte) Math.min(127, ((copy.Velocity & 0xFF) * vol) / 100);
+                }
                 copy.DeltaTime = copy.StartTime - prevST;
                 prevST = copy.StartTime;
                 filtered.add(copy);
@@ -2138,5 +2143,4 @@ public class MidiFile {
     }
 
 }  /* End class MidiFile */
-
 
