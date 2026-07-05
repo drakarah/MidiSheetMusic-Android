@@ -1371,19 +1371,22 @@ public class MidiFile {
             ArrayList<MidiEvent> original = allevents.get(tracknum);
             ArrayList<MidiEvent> filtered = new ArrayList<>();
 
-            byte trackChannel = -1;
-            byte origInstrument = 0;
-            boolean foundPC = false;
+            boolean[] usedChannels = new boolean[16];
+            byte[] origInstruments = new byte[16];
             MidiEvent endOfTrackEvent = null;
             for (MidiEvent e : original) {
-                if (trackChannel < 0 &&
-                        (e.EventFlag == EventNoteOn || e.EventFlag == EventNoteOff ||
-                         e.EventFlag == EventProgramChange || e.EventFlag == EventControlChange)) {
-                    trackChannel = e.Channel;
+                if (e.EventFlag == EventNoteOn || e.EventFlag == EventNoteOff ||
+                    e.EventFlag == EventProgramChange || e.EventFlag == EventControlChange) {
+                    int channel = e.Channel & 0xFF;
+                    if (channel >= 0 && channel < usedChannels.length) {
+                        usedChannels[channel] = true;
+                    }
                 }
-                if (!foundPC && e.EventFlag == EventProgramChange) {
-                    origInstrument = e.Instrument;
-                    foundPC = true;
+                if (e.EventFlag == EventProgramChange) {
+                    int channel = e.Channel & 0xFF;
+                    if (channel >= 0 && channel < origInstruments.length) {
+                        origInstruments[channel] = e.Instrument;
+                    }
                 }
                 if (e.EventFlag == MetaEvent && e.Metaevent == MetaEventEndOfTrack) {
                     endOfTrackEvent = e;
@@ -1392,28 +1395,30 @@ public class MidiFile {
 
             filtered.add(CreateTempoEvent(options.tempo));
 
-            if (trackChannel >= 0) {
+            for (int channel = 0; channel < usedChannels.length; channel++) {
+                if (!usedChannels[channel] || channel == 9) {
+                    continue;
+                }
                 byte instrument = options.useDefaultInstruments
-                        ? origInstrument
-                        : (byte) instruments[trackChannel];
+                        ? origInstruments[channel]
+                        : (byte) instruments[channel];
                 MidiEvent pc = new MidiEvent();
                 pc.DeltaTime = 0;
                 pc.StartTime = 0;
                 pc.HasEventflag = true;
                 pc.EventFlag = EventProgramChange;
-                pc.Channel = trackChannel;
+                pc.Channel = (byte) channel;
                 pc.Instrument = instrument;
                 filtered.add(pc);
             }
 
-            int vol = (trackChannel >= 0) ? channelVolume[trackChannel] : 100;
-            boolean keep = (trackChannel < 0) || keepchannel[trackChannel];
             int prevST = 0;
             for (MidiEvent e : original) {
                 if (e.EventFlag != EventNoteOn && e.EventFlag != EventNoteOff) {
                     continue;
                 }
-                if (!keep) {
+                int channel = e.Channel & 0xFF;
+                if (channel < 0 || channel >= keepchannel.length) {
                     continue;
                 }
                 MidiEvent copy = e.Clone();
@@ -1421,7 +1426,16 @@ public class MidiFile {
                 if (num < 0) num = 0;
                 if (num > 127) num = 127;
                 copy.Notenumber = (byte) num;
-                copy.Velocity = (byte) Math.min(127, ((copy.Velocity & 0xFF) * vol) / 100);
+                if (!keepchannel[channel]) {
+                    /* Keep muted-channel note events to preserve timing while
+                     * silencing the channel. */
+                    if (copy.EventFlag == EventNoteOn) {
+                        copy.Velocity = 0;
+                    }
+                } else {
+                    int vol = channelVolume[channel];
+                    copy.Velocity = (byte) Math.min(127, ((copy.Velocity & 0xFF) * vol) / 100);
+                }
                 copy.DeltaTime = copy.StartTime - prevST;
                 prevST = copy.StartTime;
                 filtered.add(copy);
@@ -2129,6 +2143,4 @@ public class MidiFile {
     }
 
 }  /* End class MidiFile */
-
-
 
