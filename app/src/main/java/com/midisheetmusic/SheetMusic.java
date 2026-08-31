@@ -211,7 +211,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
         SymbolWidths widths = new SymbolWidths(allsymbols, lyrics);
         AlignSymbols(allsymbols, widths, options);
 
-        staffs = CreateStaffs(allsymbols, mainkey, options, time.getMeasure());
+        staffs = CreateStaffs(allsymbols, mainkey, options, time);
         CreateAllBeamedChords(allsymbols, time);
         if (lyrics != null) {
             AddLyricsToStaffs(staffs, lyrics);
@@ -416,11 +416,24 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
         /* The starttime of the beginning of the measure */
         int measuretime = 0;
 
+        /* If the song starts with a pickup/anacrusis measure, the first
+         * measure is shorter than a regular measure (its length is
+         * measureOffset).  After that first (partial) measure, bar lines
+         * fall at regular measure-length intervals as usual.
+         */
+        boolean pastPickupMeasure = (time.getMeasureOffset() <= 0);
+
         int i = 0;
         while (i < chords.size()) {
             if (measuretime <= chords.get(i).getStartTime()) {
                 symbols.add(new BarSymbol(measuretime) );
-                measuretime += time.getMeasure();
+                if (!pastPickupMeasure) {
+                    measuretime = time.getMeasureOffset();
+                    pastPickupMeasure = true;
+                }
+                else {
+                    measuretime += time.getMeasure();
+                }
             }
             else {
                 symbols.add(chords.get(i));
@@ -431,7 +444,13 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
         /* Keep adding bars until the last StartTime (the end of the song) */
         while (measuretime < lastStart) {
             symbols.add(new BarSymbol(measuretime) );
-            measuretime += time.getMeasure();
+            if (!pastPickupMeasure) {
+                measuretime = time.getMeasureOffset();
+                pastPickupMeasure = true;
+            }
+            else {
+                measuretime += time.getMeasure();
+            }
         }
 
         /* Add the final vertical bar to the last measure */
@@ -666,18 +685,24 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
      *
      *  Store the indexes of the consecutive chords in chordIndexes.
      *  Store the horizontal distance (pixels) between the first and last chord.
+     *  If midDistance is non-null, also store the horizontal distance (pixels)
+     *  between the first and second chord (used to precisely position a partial
+     *  secondary beam attached to the middle chord of a 3-chord beam group).
      *  If we failed to find consecutive chords, return false.
      */
     private static boolean
     FindConsecutiveChords(ArrayList<MusicSymbol> symbols, TimeSignature time,
                           int startIndex, int[] chordIndexes,
-                          BoxedInt horizDistance) {
+                          BoxedInt horizDistance, BoxedInt midDistance) {
 
         int i = startIndex;
         int numChords = chordIndexes.length;
 
         while (true) {
             horizDistance.value = 0;
+            if (midDistance != null) {
+                midDistance.value = 0;
+            }
 
             /* Find the starting chord */
             while (i < symbols.size() - numChords) {
@@ -713,6 +738,9 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
                 }
                 chordIndexes[chordIndex] = i;
                 horizDistance.value += symbols.get(i).getWidth();
+                if (chordIndex == 1 && midDistance != null) {
+                    midDistance.value = horizDistance.value;
+                }
             }
             if (foundChords) {
                 return true;
@@ -931,10 +959,12 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
             while (true) {
                 BoxedInt horizDistance = new BoxedInt();
                 horizDistance.value = 0;
+                BoxedInt midDistance = new BoxedInt();
+                midDistance.value = 0;
                 boolean found = FindConsecutiveChords(symbols, time,
                                                    startIndex,
                                                    chordIndexes,
-                                                   horizDistance);
+                                                   horizDistance, midDistance);
                 if (!found) {
                     break;
                 }
@@ -943,7 +973,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
                 }
 
                 if (ChordSymbol.CanCreateBeam(chords, time, startBeat)) {
-                    ChordSymbol.CreateBeam(chords, horizDistance.value);
+                    ChordSymbol.CreateBeam(chords, horizDistance.value, midDistance.value);
                     startIndex = chordIndexes[numChords-1] + 1;
                 }
                 else {
@@ -1002,7 +1032,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
      *  Also, measures should not span multiple Staffs.
      */
     private ArrayList<Staff> 
-    CreateStaffsForTrack(ArrayList<MusicSymbol> symbols, int measurelen, 
+    CreateStaffsForTrack(ArrayList<MusicSymbol> symbols, TimeSignature time, 
                          KeySignature key, MidiOptions options,
                          int track, int totaltracks, int originalTrackNum) {
         int keysigWidth = KeySignatureWidth(key);
@@ -1050,13 +1080,13 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
             if (endindex == symbols.size() - 1) {
                 /* endindex stays the same */
             }
-            else if (symbols.get(startindex).getStartTime() / measurelen ==
-                     symbols.get(endindex).getStartTime() / measurelen) {
+            else if (time.GetMeasureForTime(symbols.get(startindex).getStartTime()) ==
+                     time.GetMeasureForTime(symbols.get(endindex).getStartTime())) {
                 /* endindex stays the same */
             }
             else {
-                int endmeasure = symbols.get(endindex+1).getStartTime()/measurelen;
-                while (symbols.get(endindex).getStartTime() / measurelen == 
+                int endmeasure = time.GetMeasureForTime(symbols.get(endindex+1).getStartTime());
+                while (time.GetMeasureForTime(symbols.get(endindex).getStartTime()) ==
                        endmeasure) {
                     endindex--;
                 }
@@ -1098,7 +1128,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
      */
     private ArrayList<Staff> 
     CreateStaffs(ArrayList<ArrayList<MusicSymbol>> allsymbols, KeySignature key, 
-                 MidiOptions options, int measurelen) {
+                 MidiOptions options, TimeSignature time) {
 
         ArrayList<ArrayList<Staff>> trackstaffs = new ArrayList<>(allsymbols.size());
         int totaltracks = allsymbols.size();
@@ -1127,7 +1157,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
 
         for (int track = 0; track < totaltracks; track++) {
             ArrayList<MusicSymbol> symbols = allsymbols.get( track );
-            trackstaffs.add(CreateStaffsForTrack(symbols, measurelen, key, 
+            trackstaffs.add(CreateStaffsForTrack(symbols, time, key, 
                                                  options, track, totaltracks,
                                                  originalTrackNums[track]));
         }

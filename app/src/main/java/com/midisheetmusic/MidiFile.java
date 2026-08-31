@@ -608,6 +608,20 @@ public class MidiFile {
         allevents = new ArrayList<ArrayList<MidiEvent>>();
         for (int tracknum = 0; tracknum < num_tracks; tracknum++) {
             allevents.add(ReadTrack(file));
+        }
+
+        /* Some tools (e.g. MuseScore) write a "Da Capo al Fine" repeat by
+         * literally duplicating the notes for each pass, and re-encode the
+         * leading pickup/anacrusis measure every time the repeat re-enters
+         * (using the same short-time-signature-then-main-time-signature
+         * trick used for the very first pickup, see ExtractPickupSplices()).
+         * Detect and splice out all such mid-song occurrences here, before
+         * building the MidiTrack note lists, so that the rest of the code
+         * can continue to assume a single constant measure length plus one
+         * leading pickup offset. */
+        SplicePickupRepeats(allevents);
+
+        for (int tracknum = 0; tracknum < num_tracks; tracknum++) {
             MidiTrack track = new MidiTrack(allevents.get(tracknum), tracknum);
             if (track.getNotes().size() > 0) {
                 tracks.add(track);
@@ -635,8 +649,7 @@ public class MidiFile {
         /* Determine the time signature */
         long tempo = 0;
         boolean foundMidSongTempo = false;
-        int numer = 0;
-        int denom = 0;
+        ArrayList<MidiEvent> timeSigEvents = new ArrayList<MidiEvent>();
         for (ArrayList<MidiEvent> list : allevents) {
             for (MidiEvent mevent : list) {
                 if (mevent.Metaevent == MetaEventTempo) {
@@ -655,19 +668,54 @@ public class MidiFile {
                         foundMidSongTempo = true;
                     }
                 }
-                if (mevent.Metaevent == MetaEventTimeSignature && numer == 0) {
-                    numer = mevent.Numerator;
-                    denom = mevent.Denominator;
+                if (mevent.Metaevent == MetaEventTimeSignature) {
+                    timeSigEvents.add(mevent);
                 }
             }
         }
         if (tempo == 0) {
             tempo = 500000; /* 500,000 microseconds = 0.05 sec */
         }
+
+        int numer = 0;
+        int denom = 0;
+        int pickupPulses = 0;
+        if (!timeSigEvents.isEmpty()) {
+            Collections.sort(timeSigEvents, new Comparator<MidiEvent>() {
+                public int compare(MidiEvent a, MidiEvent b) {
+                    return a.StartTime - b.StartTime;
+                }
+            });
+            MidiEvent first = timeSigEvents.get(0);
+            numer = first.Numerator;
+            denom = first.Denominator;
+
+            if (first.StartTime == 0 && timeSigEvents.size() >= 2) {
+                MidiEvent second = timeSigEvents.get(1);
+                if (second.StartTime > 0) {
+                    /* Some tools (e.g. MuseScore) encode a pickup/anacrusis
+                     * measure by writing a short-lived time signature at tick 0
+                     * whose measure length exactly matches the length of the
+                     * pickup, immediately followed by the "real" time signature
+                     * for the rest of the song.  Detect that pattern here, so
+                     * that we use the real time signature (instead of the
+                     * throw-away pickup one), and remember the pickup length
+                     * so that measures/bar lines can be aligned correctly.
+                     */
+                    int firstMeasureLen =
+                        new TimeSignature(first.Numerator, first.Denominator, quarternote, (int)tempo).getMeasure();
+                    if (second.StartTime == firstMeasureLen) {
+                        numer = second.Numerator;
+                        denom = second.Denominator;
+                        pickupPulses = second.StartTime;
+                    }
+                }
+            }
+        }
         if (numer == 0) {
             numer = 4; denom = 4;
         }
-        timesig = new TimeSignature(numer, denom, quarternote, (int)tempo);
+        timesig = new TimeSignature(numer, denom, quarternote, (int)tempo, pickupPulses);
     }
 
     /** Parse a single Midi track into a list of MidiEvents.

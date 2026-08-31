@@ -233,7 +233,7 @@ public class ChordSymbol implements MusicSymbol {
             notedata[i].leftside = true;
             notedata[i].whitenote = key.GetWhiteNote(midi.getNumber());
             notedata[i].duration = time.GetNoteDuration(midi.getEndTime() - midi.getStartTime());
-            notedata[i].accid = key.GetAccidental(midi.getNumber(), midi.getStartTime() / time.getMeasure());
+            notedata[i].accid = key.GetAccidental(midi.getNumber(), time.GetMeasureForTime(midi.getStartTime()));
 
             if (i > 0 && (notedata[i].whitenote.Dist(notedata[i-1].whitenote) == 1)) {
                 /* This note (notedata[i]) overlaps with the previous note.
@@ -858,6 +858,23 @@ public class ChordSymbol implements MusicSymbol {
      * If startQuarter is true, the first note should start on a quarter note
      * (only applies to 2-chord beams).
      */
+
+    /** Return how far (in pulses) the given start time is from the nearest
+     *  beat boundary, where beats are aligned to the song's beat grid.
+     *  If the song has a leading pickup/anacrusis measure, the beat grid
+     *  is anchored at the end of the pickup (time.getMeasureOffset()),
+     *  not at time 0, since the pickup shifts where downbeats fall.
+     */
+    private static int
+    BeatAlignOffset(int starttime, TimeSignature time, int beat) {
+        int shifted = starttime - time.getMeasureOffset();
+        int remainder = shifted % beat;
+        if (remainder < 0) {
+            remainder += beat;
+        }
+        return remainder;
+    }
+
     public static
     boolean CanCreateBeam(ChordSymbol[] chords, TimeSignature time, boolean startQuarter) {
         int numChords = chords.length;
@@ -866,7 +883,7 @@ public class ChordSymbol implements MusicSymbol {
         if (firstStem == null || lastStem == null) {
             return false;
         }
-        int measure = chords[0].getStartTime() / time.getMeasure();
+        int measure = time.GetMeasureForTime(chords[0].getStartTime());
         NoteDuration dur = firstStem.getDuration();
         NoteDuration dur2 = lastStem.getDuration();
 
@@ -881,6 +898,7 @@ public class ChordSymbol implements MusicSymbol {
         boolean mixed_16_8_16 = false;
         boolean mixed_8_16_16 = false;
         boolean mixed_16_16_8 = false;
+        boolean mixed_d8_16_8 = false;
         if (numChords == 3) {
             Stem midStem = chords[1].getStem();
             if (midStem != null) {
@@ -896,15 +914,25 @@ public class ChordSymbol implements MusicSymbol {
                            midStem.getDuration() == NoteDuration.Sixteenth &&
                            dur2 == NoteDuration.Eighth) {
                     mixed_16_16_8 = true;
+                } else if (dur  == NoteDuration.DottedEighth &&
+                           midStem.getDuration() == NoteDuration.Sixteenth &&
+                           dur2 == NoteDuration.Eighth) {
+                    /* Dotted-eighth + sixteenth + eighth: the classic
+                     * "dotted rhythm" beam group spanning one full compound
+                     * (dotted-quarter) beat in x/8 compound time, e.g. 6/8.
+                     * MuseScore and other notation tools beam this pattern
+                     * together with a secondary 16th-beam over the first
+                     * two notes only. */
+                    mixed_d8_16_8 = true;
                 }
             }
         }
-        boolean anyMixed3 = mixed_16_8_16 || mixed_8_16_16 || mixed_16_16_8;
+        boolean anyMixed3 = mixed_16_8_16 || mixed_8_16_16 || mixed_16_16_8 || mixed_d8_16_8;
 
         if (dur == NoteDuration.Whole || dur == NoteDuration.Half ||
             dur == NoteDuration.DottedHalf || dur == NoteDuration.Quarter ||
             dur == NoteDuration.DottedQuarter ||
-            (dur == NoteDuration.DottedEighth && !dotted8_to_16)) {
+            (dur == NoteDuration.DottedEighth && !dotted8_to_16 && !mixed_d8_16_8)) {
 
             return false;
         }
@@ -924,7 +952,7 @@ public class ChordSymbol implements MusicSymbol {
             if (time.getNumerator() == 6 && time.getDenominator() == 4) {
                 /* first chord must start at 1st or 4th quarter note */
                 int beat = time.getQuarter() * 3;
-                if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+                if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                     return false;
                 }
             }
@@ -950,7 +978,7 @@ public class ChordSymbol implements MusicSymbol {
                 beat = time.getQuarter() / 2;
             }
 
-            if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+            if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                 return false;
             }
         }
@@ -963,27 +991,34 @@ public class ChordSymbol implements MusicSymbol {
                 return false;
             }
 
-            /* chord must start on quarter note */
+            /* chord must start on quarter note, except for groups that span
+             * a full compound (dotted-quarter) beat -- 12/8's plain eighth
+             * triplets, and a dotted-eighth+sixteenth+eighth group in any
+             * x/8 compound time (6/8, 9/8, 12/8) -- which must instead start
+             * on a compound-beat (dotted-quarter) boundary. */
             int beat = time.getQuarter();
-            if (time.getNumerator() == 12 && time.getDenominator() == 8) {
-                /* In 12/8 time, chord must start on 3*8th beat */
+            boolean compoundBeatGroup =
+                (time.getNumerator() == 12 && time.getDenominator() == 8) ||
+                (mixed_d8_16_8 && time.getDenominator() == 8 && time.getNumerator() % 3 == 0);
+            if (compoundBeatGroup) {
+                /* chord must start on 3*8th beat (dotted-quarter boundary) */
                 beat = time.getQuarter()/2 * 3;
             }
-            if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+            if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                 return false;
             }
         }
         else if (numChords == 2) {
             if (startQuarter) {
                 int beat = time.getQuarter();
-                if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+                if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                     return false;
                 }
             }
         }
 
         for (ChordSymbol chord : chords) {
-            if ((chord.getStartTime() / time.getMeasure()) != measure)
+            if (time.GetMeasureForTime(chord.getStartTime()) != measure)
                 return false;
             if (chord.getStem() == null)
                 return false;
@@ -1043,7 +1078,7 @@ public class ChordSymbol implements MusicSymbol {
      *   This is therefore correct and time-signature-independent.
      */
     public static
-    void CreateBeam(ChordSymbol[] chords, int spacing) {
+    void CreateBeam(ChordSymbol[] chords, int spacing, int midSpacing) {
         Stem firstStem = chords[0].getStem();
         Stem lastStem = chords[chords.length-1].getStem();
 
@@ -1094,6 +1129,17 @@ public class ChordSymbol implements MusicSymbol {
             Stem midStem = chords[1].getStem();
             NoteDuration lastDur = lastStem.getDuration();
             if (midStem != null) {
+                /* Compute the exact local x-position of the middle chord's stem
+                 * (in the same coordinate frame as xstart/xend in
+                 * Stem.DrawHorizBarStem), rather than assuming it sits halfway
+                 * between the first and last chord. This matters because an
+                 * accidental (or other width-affecting element) on any chord
+                 * widens that chord's own box and shifts its stem position,
+                 * which breaks a naive linear-interpolation midpoint. */
+                int midLocalOffset = (midStem.getSide() == Stem.LeftSide)
+                        ? SheetMusic.LineSpace/4 + 1
+                        : SheetMusic.LineSpace/4 + SheetMusic.NoteWidth;
+                firstStem.setPartialBeamMidX(midSpacing + midLocalOffset);
                 if (firstDur == NoteDuration.Sixteenth &&
                         midStem.getDuration() == NoteDuration.Eighth &&
                         lastDur  == NoteDuration.Sixteenth) {
@@ -1109,6 +1155,12 @@ public class ChordSymbol implements MusicSymbol {
                         lastDur  == NoteDuration.Eighth) {
                     /* 16th+16th+8th: left-half 16th beam */
                     firstStem.setPartialSixteenthBeam(Stem.PARTIAL_BEAM_LEFT);
+                } else if (firstDur == NoteDuration.DottedEighth &&
+                        midStem.getDuration() == NoteDuration.Sixteenth &&
+                        lastDur  == NoteDuration.Eighth) {
+                    /* Dotted-eighth+16th+8th: secondary 16th beam is a short
+                     * hook attached at the isolated middle (16th) note only. */
+                    firstStem.setPartialSixteenthBeam(Stem.PARTIAL_BEAM_DOTTED_LEFT);
                 }
             }
         }
