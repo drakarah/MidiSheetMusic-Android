@@ -143,6 +143,15 @@ public class SettingsActivity extends AppCompatActivity {
         private SwitchPreferenceCompat useFullHeight;       /** Drawing on full height option */
         private SwitchPreferenceCompat showTrackLabels;     /** Show track number and instrument label */
 
+        /** The common time signatures that can be force-selected in the settings.
+         *  "Default" means use whatever time signature was detected in the midi file.
+         *  Only numerator/denominator combinations that have digit images available
+         *  (see TimeSigSymbol.LoadImages) are listed here.
+         */
+        private static final String[] TIME_SIGNATURE_VALUES = {
+            "Default", "2/4", "3/4", "4/4", "2/2", "3/8", "6/8", "6/4", "9/8", "12/8"
+        };
+
         private ColorPreference shade1Color;          /** Right-hand color */
         private ColorPreference shade2Color;          /** Left-hand color */
 
@@ -350,12 +359,20 @@ public class SettingsActivity extends AppCompatActivity {
 
         /** Create the "Time Signature" preference */
         private void createTimeSignaturePrefs(PreferenceScreen root) {
-            String[] values = { "Default", "3/4", "4/4" };
+            String[] values = TIME_SIGNATURE_VALUES;
             int selected = 0;
-            if (options.time != null && options.time.getNumerator() == 3)
-                selected = 1;
-            else if (options.time != null && options.time.getNumerator() == 4)
-                selected = 2;
+            if (options.time != null) {
+                for (int i = 1; i < values.length; i++) {
+                    String[] parts = values[i].split("/");
+                    int numer = Integer.parseInt(parts[0]);
+                    int denom = Integer.parseInt(parts[1]);
+                    if (options.time.getNumerator() == numer &&
+                        options.time.getDenominator() == denom) {
+                        selected = i;
+                        break;
+                    }
+                }
+            }
 
             time = new ListPreference(context);
             time.setKey("time_signature");
@@ -517,18 +534,15 @@ public class SettingsActivity extends AppCompatActivity {
             options.transpose = Integer.parseInt(transpose.getValue());
             options.midiShift = Integer.parseInt(midiShift.getValue());
             options.key = Integer.parseInt(key.getValue());
-            switch (time.getValue()) {
-                case "Default":
-                    options.time = null;
-                    break;
-                case "3/4":
-                    options.time = new TimeSignature(3, 4, options.defaultTime.getQuarter(),
-                            options.defaultTime.getTempo());
-                    break;
-                case "4/4":
-                    options.time = new TimeSignature(4, 4, options.defaultTime.getQuarter(),
-                            options.defaultTime.getTempo());
-                    break;
+            String selectedTime = time.getValue();
+            if (selectedTime == null || selectedTime.equals("Default")) {
+                options.time = null;
+            } else {
+                String[] parts = selectedTime.split("/");
+                int numer = Integer.parseInt(parts[0]);
+                int denom = Integer.parseInt(parts[1]);
+                options.time = new TimeSignature(numer, denom, options.defaultTime.getQuarter(),
+                        options.defaultTime.getTempo());
             }
             options.combineInterval = Integer.parseInt(combineInterval.getValue());
             options.countInMeasures = Integer.parseInt(countInMeasures.getValue());
