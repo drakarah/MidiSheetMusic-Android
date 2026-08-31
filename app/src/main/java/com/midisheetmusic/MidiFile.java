@@ -619,7 +619,7 @@ public class MidiFile {
          * building the MidiTrack note lists, so that the rest of the code
          * can continue to assume a single constant measure length plus one
          * leading pickup offset. */
-        SplicePickupRepeats(allevents);
+        //SplicePickupRepeats(allevents);
 
         for (int tracknum = 0; tracknum < num_tracks; tracknum++) {
             MidiTrack track = new MidiTrack(allevents.get(tracknum), tracknum);
