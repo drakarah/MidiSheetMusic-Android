@@ -416,11 +416,24 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
         /* The starttime of the beginning of the measure */
         int measuretime = 0;
 
+        /* If the song starts with a pickup/anacrusis measure, the first
+         * measure is shorter than a regular measure (its length is
+         * measureOffset).  After that first (partial) measure, bar lines
+         * fall at regular measure-length intervals as usual.
+         */
+        boolean pastPickupMeasure = (time.getMeasureOffset() <= 0);
+
         int i = 0;
         while (i < chords.size()) {
             if (measuretime <= chords.get(i).getStartTime()) {
                 symbols.add(new BarSymbol(measuretime) );
-                measuretime += time.getMeasure();
+                if (!pastPickupMeasure) {
+                    measuretime = time.getMeasureOffset();
+                    pastPickupMeasure = true;
+                }
+                else {
+                    measuretime += time.getMeasure();
+                }
             }
             else {
                 symbols.add(chords.get(i));
@@ -431,7 +444,13 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
         /* Keep adding bars until the last StartTime (the end of the song) */
         while (measuretime < lastStart) {
             symbols.add(new BarSymbol(measuretime) );
-            measuretime += time.getMeasure();
+            if (!pastPickupMeasure) {
+                measuretime = time.getMeasureOffset();
+                pastPickupMeasure = true;
+            }
+            else {
+                measuretime += time.getMeasure();
+            }
         }
 
         /* Add the final vertical bar to the last measure */

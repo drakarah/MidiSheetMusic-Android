@@ -60,6 +60,8 @@ public class Staff {
     private int starttime;              /** The time (in pulses) of first symbol */
     private int endtime;                /** The time (in pulses) of last symbol */
     private int measureLength;          /** The time (in pulses) of a measure */
+    private int measureOffset;          /** The time (in pulses) of a leading pickup/anacrusis
+                                          *  measure, or 0 if there is none */
     private int beatInterval;           /** The time (in pulses) between beats */
     private MidiOptions options;        /** The midi options (used for loop highlighting) */
     private String swingLabel;          /** Swing marker text shown above the first staff, or null */
@@ -91,11 +93,13 @@ public class Staff {
         }
         if (options.time != null) {
             measureLength = options.time.getMeasure();
+            measureOffset = options.time.getMeasureOffset();
             beatInterval = options.time.getNumerator() > 0
                     ? measureLength / options.time.getNumerator() : measureLength;
         }
         else {
             measureLength = options.defaultTime.getMeasure();
+            measureOffset = options.defaultTime.getMeasureOffset();
             beatInterval = options.defaultTime.getNumerator() > 0
                     ? measureLength / options.defaultTime.getNumerator() : measureLength;
         }
@@ -334,7 +338,15 @@ public class Staff {
 
         for (MusicSymbol s : symbols) {
             if (s instanceof BarSymbol) {
-                int measure = 1 + s.getStartTime() / measureLength;
+                int measure;
+                if (measureOffset > 0) {
+                    measure = (s.getStartTime() < measureOffset)
+                            ? 0
+                            : 1 + (s.getStartTime() - measureOffset) / measureLength;
+                }
+                else {
+                    measure = 1 + s.getStartTime() / measureLength;
+                }
                 canvas.drawText("" + measure,
                                 xpos + SheetMusic.NoteWidth/2,
                                 ypos,

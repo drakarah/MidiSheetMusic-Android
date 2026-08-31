@@ -233,7 +233,7 @@ public class ChordSymbol implements MusicSymbol {
             notedata[i].leftside = true;
             notedata[i].whitenote = key.GetWhiteNote(midi.getNumber());
             notedata[i].duration = time.GetNoteDuration(midi.getEndTime() - midi.getStartTime());
-            notedata[i].accid = key.GetAccidental(midi.getNumber(), midi.getStartTime() / time.getMeasure());
+            notedata[i].accid = key.GetAccidental(midi.getNumber(), time.GetMeasureForTime(midi.getStartTime()));
 
             if (i > 0 && (notedata[i].whitenote.Dist(notedata[i-1].whitenote) == 1)) {
                 /* This note (notedata[i]) overlaps with the previous note.
@@ -866,7 +866,7 @@ public class ChordSymbol implements MusicSymbol {
         if (firstStem == null || lastStem == null) {
             return false;
         }
-        int measure = chords[0].getStartTime() / time.getMeasure();
+        int measure = time.GetMeasureForTime(chords[0].getStartTime());
         NoteDuration dur = firstStem.getDuration();
         NoteDuration dur2 = lastStem.getDuration();
 
@@ -983,7 +983,7 @@ public class ChordSymbol implements MusicSymbol {
         }
 
         for (ChordSymbol chord : chords) {
-            if ((chord.getStartTime() / time.getMeasure()) != measure)
+            if (time.GetMeasureForTime(chord.getStartTime()) != measure)
                 return false;
             if (chord.getStem() == null)
                 return false;
