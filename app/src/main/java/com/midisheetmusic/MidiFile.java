@@ -608,6 +608,20 @@ public class MidiFile {
         allevents = new ArrayList<ArrayList<MidiEvent>>();
         for (int tracknum = 0; tracknum < num_tracks; tracknum++) {
             allevents.add(ReadTrack(file));
+        }
+
+        /* Some tools (e.g. MuseScore) write a "Da Capo al Fine" repeat by
+         * literally duplicating the notes for each pass, and re-encode the
+         * leading pickup/anacrusis measure every time the repeat re-enters
+         * (using the same short-time-signature-then-main-time-signature
+         * trick used for the very first pickup, see ExtractPickupSplices()).
+         * Detect and splice out all such mid-song occurrences here, before
+         * building the MidiTrack note lists, so that the rest of the code
+         * can continue to assume a single constant measure length plus one
+         * leading pickup offset. */
+        SplicePickupRepeats(allevents);
+
+        for (int tracknum = 0; tracknum < num_tracks; tracknum++) {
             MidiTrack track = new MidiTrack(allevents.get(tracknum), tracknum);
             if (track.getNotes().size() > 0) {
                 tracks.add(track);
