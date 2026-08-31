@@ -47,6 +47,8 @@ public class Stem {
     public static final int PARTIAL_BEAM_BOTH_ENDS = 1; /* 16th+8th+16th: short stubs at each end */
     public static final int PARTIAL_BEAM_RIGHT     = 2; /* 8th+16th+16th:  right-half 16th beam */
     public static final int PARTIAL_BEAM_LEFT      = 3; /* 16th+16th+8th:  left-half 16th beam */
+    public static final int PARTIAL_BEAM_DOTTED_LEFT = 4; /* dotted-8th+16th+8th: 16th beam over
+                                                             * just the first two notes */
 
     private NoteDuration duration; /** Duration of the stem. */
     private int direction;         /** Up, Down, or None */
@@ -399,11 +401,24 @@ public class Stem {
 
             /* A dotted eighth will connect to a 16th note. */
             if (duration == NoteDuration.DottedEighth) {
-                int x = xend - SheetMusic.NoteHeight;
-                double slope = (yend - ystart) * 1.0 / (xend - xstart);
-                int y = (int)(slope * (x - xend) + yend); 
+                if (partialSixteenthBeam == PARTIAL_BEAM_DOTTED_LEFT && xend > xstart) {
+                    /* Dotted-eighth+16th+8th: the secondary 16th-level beam
+                     * only covers the dotted-eighth and sixteenth (the first
+                     * 4/6 of the beam, proportional to their combined
+                     * duration); the trailing plain eighth has no secondary
+                     * beam. */
+                    int xboundary = xstart + (xend - xstart) * 2 / 3;
+                    double slope = (yend - ystart) * 1.0 / (xend - xstart);
+                    int yboundary = (int)(slope * (xboundary - xstart) + ystart);
+                    canvas.drawLine(xstart, ystart, xboundary, yboundary, paint);
+                }
+                else {
+                    int x = xend - SheetMusic.NoteHeight;
+                    double slope = (yend - ystart) * 1.0 / (xend - xstart);
+                    int y = (int)(slope * (x - xend) + yend);
 
-                canvas.drawLine(x, y, xend, yend, paint);
+                    canvas.drawLine(x, y, xend, yend, paint);
+                }
             }
 
             /* For 8th+16th+16th: add a right-half 16th secondary beam even though the
@@ -472,11 +487,24 @@ public class Stem {
 
             /* A dotted eighth will connect to a 16th note. */
             if (duration == NoteDuration.DottedEighth) {
-                int x = xend - SheetMusic.NoteHeight;
-                double slope = (yend - ystart) * 1.0 / (xend - xstart);
-                int y = (int)(slope * (x - xend) + yend); 
+                if (partialSixteenthBeam == PARTIAL_BEAM_DOTTED_LEFT && xend > xstart) {
+                    /* Dotted-eighth+16th+8th: the secondary 16th-level beam
+                     * only covers the dotted-eighth and sixteenth (the first
+                     * 4/6 of the beam, proportional to their combined
+                     * duration); the trailing plain eighth has no secondary
+                     * beam. */
+                    int xboundary = xstart + (xend - xstart) * 2 / 3;
+                    double slope = (yend - ystart) * 1.0 / (xend - xstart);
+                    int yboundary = (int)(slope * (xboundary - xstart) + ystart);
+                    canvas.drawLine(xstart, ystart, xboundary, yboundary, paint);
+                }
+                else {
+                    int x = xend - SheetMusic.NoteHeight;
+                    double slope = (yend - ystart) * 1.0 / (xend - xstart);
+                    int y = (int)(slope * (x - xend) + yend);
 
-                canvas.drawLine(x, y, xend, yend, paint);
+                    canvas.drawLine(x, y, xend, yend, paint);
+                }
             }
 
             /* For 8th+16th+16th: add a right-half 16th secondary beam even though the
