@@ -32,6 +32,8 @@ public class TimeSignature implements Serializable {
     private int quarternote;    /** Number of pulses per quarter note */
     private int measure;        /** Number of pulses per measure */
     private int tempo;          /** Number of microseconds per quarter note */
+    private int measureOffset;  /** Length (in pulses) of a leading pickup/anacrusis
+                                  *  measure, or 0 if the song has no pickup measure */
 
     /** Get the numerator of the time signature */
     public int getNumerator() { return numerator; }
@@ -48,10 +50,23 @@ public class TimeSignature implements Serializable {
     /** Get the number of microseconds per quarter note */ 
     public int getTempo() { return tempo; }
 
+    /** Get the length (in pulses) of the leading pickup/anacrusis measure,
+     *  or 0 if the song does not start with a pickup measure.
+     */
+    public int getMeasureOffset() { return measureOffset; }
+
     /** Create a new time signature, with the given numerator,
      * denominator, pulses per quarter note, and tempo.
      */
     public TimeSignature(int numerator, int denominator, int quarternote, int tempo) {
+        this(numerator, denominator, quarternote, tempo, 0);
+    }
+
+    /** Create a new time signature, with the given numerator,
+     * denominator, pulses per quarter note, tempo, and the length
+     * (in pulses) of a leading pickup/anacrusis measure (0 if none).
+     */
+    public TimeSignature(int numerator, int denominator, int quarternote, int tempo, int measureOffset) {
         if (numerator <= 0 || denominator <= 0 || quarternote <= 0) {
             throw new MidiFileException("Invalid time signature", 0);
         }
@@ -73,11 +88,28 @@ public class TimeSignature implements Serializable {
             beat = quarternote / (denominator/4);
 
         measure = numerator * beat;
+        this.measureOffset = (measureOffset > 0 && measureOffset < measure) ? measureOffset : 0;
     }
 
     /** Return which measure the given time (in pulses) belongs to. */
     public int GetMeasure(int time) {
         return time / measure;
+    }
+
+    /** Return the 1-based measure number for the given time (in pulses),
+     *  taking any leading pickup/anacrusis measure into account.  If the
+     *  song has a pickup measure, the pickup itself is measure 0, and the
+     *  first full measure is measure 1.  If there is no pickup measure,
+     *  this is equivalent to {@code 1 + GetMeasure(time)}.
+     */
+    public int GetMeasureForTime(int time) {
+        if (measureOffset <= 0) {
+            return 1 + time / measure;
+        }
+        if (time < measureOffset) {
+            return 0;
+        }
+        return 1 + (time - measureOffset) / measure;
     }
 
     /** Align note start times to 32th notes */
