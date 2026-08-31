@@ -1078,7 +1078,7 @@ public class ChordSymbol implements MusicSymbol {
      *   This is therefore correct and time-signature-independent.
      */
     public static
-    void CreateBeam(ChordSymbol[] chords, int spacing) {
+    void CreateBeam(ChordSymbol[] chords, int spacing, int midSpacing) {
         Stem firstStem = chords[0].getStem();
         Stem lastStem = chords[chords.length-1].getStem();
 
@@ -1129,6 +1129,17 @@ public class ChordSymbol implements MusicSymbol {
             Stem midStem = chords[1].getStem();
             NoteDuration lastDur = lastStem.getDuration();
             if (midStem != null) {
+                /* Compute the exact local x-position of the middle chord's stem
+                 * (in the same coordinate frame as xstart/xend in
+                 * Stem.DrawHorizBarStem), rather than assuming it sits halfway
+                 * between the first and last chord. This matters because an
+                 * accidental (or other width-affecting element) on any chord
+                 * widens that chord's own box and shifts its stem position,
+                 * which breaks a naive linear-interpolation midpoint. */
+                int midLocalOffset = (midStem.getSide() == Stem.LeftSide)
+                        ? SheetMusic.LineSpace/4 + 1
+                        : SheetMusic.LineSpace/4 + SheetMusic.NoteWidth;
+                firstStem.setPartialBeamMidX(midSpacing + midLocalOffset);
                 if (firstDur == NoteDuration.Sixteenth &&
                         midStem.getDuration() == NoteDuration.Eighth &&
                         lastDur  == NoteDuration.Sixteenth) {

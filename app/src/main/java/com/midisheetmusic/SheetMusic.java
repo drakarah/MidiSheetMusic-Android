@@ -685,18 +685,24 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
      *
      *  Store the indexes of the consecutive chords in chordIndexes.
      *  Store the horizontal distance (pixels) between the first and last chord.
+     *  If midDistance is non-null, also store the horizontal distance (pixels)
+     *  between the first and second chord (used to precisely position a partial
+     *  secondary beam attached to the middle chord of a 3-chord beam group).
      *  If we failed to find consecutive chords, return false.
      */
     private static boolean
     FindConsecutiveChords(ArrayList<MusicSymbol> symbols, TimeSignature time,
                           int startIndex, int[] chordIndexes,
-                          BoxedInt horizDistance) {
+                          BoxedInt horizDistance, BoxedInt midDistance) {
 
         int i = startIndex;
         int numChords = chordIndexes.length;
 
         while (true) {
             horizDistance.value = 0;
+            if (midDistance != null) {
+                midDistance.value = 0;
+            }
 
             /* Find the starting chord */
             while (i < symbols.size() - numChords) {
@@ -732,6 +738,9 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
                 }
                 chordIndexes[chordIndex] = i;
                 horizDistance.value += symbols.get(i).getWidth();
+                if (chordIndex == 1 && midDistance != null) {
+                    midDistance.value = horizDistance.value;
+                }
             }
             if (foundChords) {
                 return true;
@@ -950,10 +959,12 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
             while (true) {
                 BoxedInt horizDistance = new BoxedInt();
                 horizDistance.value = 0;
+                BoxedInt midDistance = new BoxedInt();
+                midDistance.value = 0;
                 boolean found = FindConsecutiveChords(symbols, time,
                                                    startIndex,
                                                    chordIndexes,
-                                                   horizDistance);
+                                                   horizDistance, midDistance);
                 if (!found) {
                     break;
                 }
@@ -962,7 +973,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
                 }
 
                 if (ChordSymbol.CanCreateBeam(chords, time, startBeat)) {
-                    ChordSymbol.CreateBeam(chords, horizDistance.value);
+                    ChordSymbol.CreateBeam(chords, horizDistance.value, midDistance.value);
                     startIndex = chordIndexes[numChords-1] + 1;
                 }
                 else {
