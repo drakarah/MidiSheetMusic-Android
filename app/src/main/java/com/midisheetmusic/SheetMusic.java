@@ -211,7 +211,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
         SymbolWidths widths = new SymbolWidths(allsymbols, lyrics);
         AlignSymbols(allsymbols, widths, options);
 
-        staffs = CreateStaffs(allsymbols, mainkey, options, time.getMeasure());
+        staffs = CreateStaffs(allsymbols, mainkey, options, time);
         CreateAllBeamedChords(allsymbols, time);
         if (lyrics != null) {
             AddLyricsToStaffs(staffs, lyrics);
@@ -1021,7 +1021,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
      *  Also, measures should not span multiple Staffs.
      */
     private ArrayList<Staff> 
-    CreateStaffsForTrack(ArrayList<MusicSymbol> symbols, int measurelen, 
+    CreateStaffsForTrack(ArrayList<MusicSymbol> symbols, TimeSignature time, 
                          KeySignature key, MidiOptions options,
                          int track, int totaltracks, int originalTrackNum) {
         int keysigWidth = KeySignatureWidth(key);
@@ -1069,13 +1069,13 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
             if (endindex == symbols.size() - 1) {
                 /* endindex stays the same */
             }
-            else if (symbols.get(startindex).getStartTime() / measurelen ==
-                     symbols.get(endindex).getStartTime() / measurelen) {
+            else if (time.GetMeasureForTime(symbols.get(startindex).getStartTime()) ==
+                     time.GetMeasureForTime(symbols.get(endindex).getStartTime())) {
                 /* endindex stays the same */
             }
             else {
-                int endmeasure = symbols.get(endindex+1).getStartTime()/measurelen;
-                while (symbols.get(endindex).getStartTime() / measurelen == 
+                int endmeasure = time.GetMeasureForTime(symbols.get(endindex+1).getStartTime());
+                while (time.GetMeasureForTime(symbols.get(endindex).getStartTime()) ==
                        endmeasure) {
                     endindex--;
                 }
@@ -1117,7 +1117,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
      */
     private ArrayList<Staff> 
     CreateStaffs(ArrayList<ArrayList<MusicSymbol>> allsymbols, KeySignature key, 
-                 MidiOptions options, int measurelen) {
+                 MidiOptions options, TimeSignature time) {
 
         ArrayList<ArrayList<Staff>> trackstaffs = new ArrayList<>(allsymbols.size());
         int totaltracks = allsymbols.size();
@@ -1146,7 +1146,7 @@ public class SheetMusic extends SurfaceView implements SurfaceHolder.Callback, S
 
         for (int track = 0; track < totaltracks; track++) {
             ArrayList<MusicSymbol> symbols = allsymbols.get( track );
-            trackstaffs.add(CreateStaffsForTrack(symbols, measurelen, key, 
+            trackstaffs.add(CreateStaffsForTrack(symbols, time, key, 
                                                  options, track, totaltracks,
                                                  originalTrackNums[track]));
         }
