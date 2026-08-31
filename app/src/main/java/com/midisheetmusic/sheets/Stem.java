@@ -47,8 +47,8 @@ public class Stem {
     public static final int PARTIAL_BEAM_BOTH_ENDS = 1; /* 16th+8th+16th: short stubs at each end */
     public static final int PARTIAL_BEAM_RIGHT     = 2; /* 8th+16th+16th:  right-half 16th beam */
     public static final int PARTIAL_BEAM_LEFT      = 3; /* 16th+16th+8th:  left-half 16th beam */
-    public static final int PARTIAL_BEAM_DOTTED_LEFT = 4; /* dotted-8th+16th+8th: 16th beam over
-                                                             * just the first two notes */
+    public static final int PARTIAL_BEAM_DOTTED_LEFT = 4; /* dotted-8th+16th+8th: short 16th-level
+                                                             * hook at the middle (16th) note only */
 
     private NoteDuration duration; /** Duration of the stem. */
     private int direction;         /** Up, Down, or None */
@@ -402,15 +402,18 @@ public class Stem {
             /* A dotted eighth will connect to a 16th note. */
             if (duration == NoteDuration.DottedEighth) {
                 if (partialSixteenthBeam == PARTIAL_BEAM_DOTTED_LEFT && xend > xstart) {
-                    /* Dotted-eighth+16th+8th: the secondary 16th-level beam
-                     * only covers the dotted-eighth and sixteenth (the first
-                     * 4/6 of the beam, proportional to their combined
-                     * duration); the trailing plain eighth has no secondary
-                     * beam. */
-                    int xboundary = xstart + (xend - xstart) * 2 / 3;
+                    /* Dotted-eighth+16th+8th: only the middle (sixteenth) note
+                     * needs this extra beam level, and it has no adjacent
+                     * sixteenth partner, so it gets a short hook attached at
+                     * its own (approximate) stem position -- not a beam
+                     * spanning back to the dotted eighth's stem, which would
+                     * make the dotted eighth look like a sixteenth itself. */
+                    int xmid = xstart + (xend - xstart) / 2;
                     double slope = (yend - ystart) * 1.0 / (xend - xstart);
-                    int yboundary = (int)(slope * (xboundary - xstart) + ystart);
-                    canvas.drawLine(xstart, ystart, xboundary, yboundary, paint);
+                    int ymid = ystart + (int)(slope * (xmid - xstart));
+                    int x = xmid - SheetMusic.NoteHeight;
+                    int y = (int)(slope * (x - xmid) + ymid);
+                    canvas.drawLine(x, y, xmid, ymid, paint);
                 }
                 else {
                     int x = xend - SheetMusic.NoteHeight;
@@ -488,15 +491,18 @@ public class Stem {
             /* A dotted eighth will connect to a 16th note. */
             if (duration == NoteDuration.DottedEighth) {
                 if (partialSixteenthBeam == PARTIAL_BEAM_DOTTED_LEFT && xend > xstart) {
-                    /* Dotted-eighth+16th+8th: the secondary 16th-level beam
-                     * only covers the dotted-eighth and sixteenth (the first
-                     * 4/6 of the beam, proportional to their combined
-                     * duration); the trailing plain eighth has no secondary
-                     * beam. */
-                    int xboundary = xstart + (xend - xstart) * 2 / 3;
+                    /* Dotted-eighth+16th+8th: only the middle (sixteenth) note
+                     * needs this extra beam level, and it has no adjacent
+                     * sixteenth partner, so it gets a short hook attached at
+                     * its own (approximate) stem position -- not a beam
+                     * spanning back to the dotted eighth's stem, which would
+                     * make the dotted eighth look like a sixteenth itself. */
+                    int xmid = xstart + (xend - xstart) / 2;
                     double slope = (yend - ystart) * 1.0 / (xend - xstart);
-                    int yboundary = (int)(slope * (xboundary - xstart) + ystart);
-                    canvas.drawLine(xstart, ystart, xboundary, yboundary, paint);
+                    int ymid = ystart + (int)(slope * (xmid - xstart));
+                    int x = xmid - SheetMusic.NoteHeight;
+                    int y = (int)(slope * (x - xmid) + ymid);
+                    canvas.drawLine(x, y, xmid, ymid, paint);
                 }
                 else {
                     int x = xend - SheetMusic.NoteHeight;

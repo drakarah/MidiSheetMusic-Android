@@ -1147,8 +1147,8 @@ public class ChordSymbol implements MusicSymbol {
                 } else if (firstDur == NoteDuration.DottedEighth &&
                         midStem.getDuration() == NoteDuration.Sixteenth &&
                         lastDur  == NoteDuration.Eighth) {
-                    /* Dotted-eighth+16th+8th: secondary 16th beam covers only
-                     * the first two notes (the dotted eighth and sixteenth). */
+                    /* Dotted-eighth+16th+8th: secondary 16th beam is a short
+                     * hook attached at the isolated middle (16th) note only. */
                     firstStem.setPartialSixteenthBeam(Stem.PARTIAL_BEAM_DOTTED_LEFT);
                 }
             }
