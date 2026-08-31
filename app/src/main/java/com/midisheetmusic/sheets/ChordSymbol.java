@@ -858,6 +858,23 @@ public class ChordSymbol implements MusicSymbol {
      * If startQuarter is true, the first note should start on a quarter note
      * (only applies to 2-chord beams).
      */
+
+    /** Return how far (in pulses) the given start time is from the nearest
+     *  beat boundary, where beats are aligned to the song's beat grid.
+     *  If the song has a leading pickup/anacrusis measure, the beat grid
+     *  is anchored at the end of the pickup (time.getMeasureOffset()),
+     *  not at time 0, since the pickup shifts where downbeats fall.
+     */
+    private static int
+    BeatAlignOffset(int starttime, TimeSignature time, int beat) {
+        int shifted = starttime - time.getMeasureOffset();
+        int remainder = shifted % beat;
+        if (remainder < 0) {
+            remainder += beat;
+        }
+        return remainder;
+    }
+
     public static
     boolean CanCreateBeam(ChordSymbol[] chords, TimeSignature time, boolean startQuarter) {
         int numChords = chords.length;
@@ -935,7 +952,7 @@ public class ChordSymbol implements MusicSymbol {
             if (time.getNumerator() == 6 && time.getDenominator() == 4) {
                 /* first chord must start at 1st or 4th quarter note */
                 int beat = time.getQuarter() * 3;
-                if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+                if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                     return false;
                 }
             }
@@ -961,7 +978,7 @@ public class ChordSymbol implements MusicSymbol {
                 beat = time.getQuarter() / 2;
             }
 
-            if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+            if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                 return false;
             }
         }
@@ -987,14 +1004,14 @@ public class ChordSymbol implements MusicSymbol {
                 /* chord must start on 3*8th beat (dotted-quarter boundary) */
                 beat = time.getQuarter()/2 * 3;
             }
-            if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+            if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                 return false;
             }
         }
         else if (numChords == 2) {
             if (startQuarter) {
                 int beat = time.getQuarter();
-                if ((chords[0].getStartTime() % beat) > time.getQuarter()/6) {
+                if (BeatAlignOffset(chords[0].getStartTime(), time, beat) > time.getQuarter()/6) {
                     return false;
                 }
             }
